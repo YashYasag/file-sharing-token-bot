@@ -96,8 +96,8 @@ async def start_command(client: Client, message: Message):
         temp_msg = await message.reply("Please wait...")
         try:
             messages = await get_messages(client, ids)
-        except:
-            await message.reply_text("Something went wrong..!")
+        except Exception as e:
+            await message.reply_text(f"Something went wrong: {str(e)}")
             return
         await temp_msg.delete()
 
@@ -117,39 +117,42 @@ async def start_command(client: Client, message: Message):
 
             try:
                 snt_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML, reply_markup=reply_markup, protect_content=PROTECT_CONTENT)
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.5)  # Small delay to prevent rate limiting
                 snt_msgs.append(snt_msg)
             except FloodWait as e:
-                await asyncio.sleep(e.x)
+                await asyncio.sleep(e.x)  # Wait for the flood delay
                 snt_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML, reply_markup=reply_markup, protect_content=PROTECT_CONTENT)
                 snt_msgs.append(snt_msg)
-            except:
-                pass
+            except Exception as e:
+                print(f"Error sending message: {str(e)}")  # Log any other errors
 
-        # Send the warning message and set a 2-minute delay for file deletion
+        # Send the warning message about file deletion
         SD = await message.reply_text("Your files will be deleted in 2 minutes. Please save them to your Saved Messages now!")
-        
-        # Wait for 2 minutes (120 seconds)
+
+        # Wait for 2 minutes before deletion
         await asyncio.sleep(120)
 
         # Delete the sent messages
         for snt_msg in snt_msgs:
             try:
                 await snt_msg.delete()
-            except:
-                pass
-        
-        # Send the final deletion confirmation message
+                print(f"Deleted message: {snt_msg.message_id}")  # Log the deleted message
+            except Exception as e:
+                print(f"Error deleting message: {str(e)}")  # Log any errors during deletion
+
+        # Send the final deletion message and inform the user
         await SD.edit_text("Your files have been deleted.")
-        
-        # Wait for a further 2 minutes before final deletion (if needed)
+
+        # Wait for another 2 minutes before final cleanup
         await asyncio.sleep(120)
 
         # Final cleanup: delete the warning message
         try:
             await SD.delete()
-        except:
-            pass
+            print("Deleted final warning message.")  # Log the final message deletion
+        except Exception as e:
+            print(f"Error deleting final warning message: {str(e)}")  # Log any errors
+
 
 
         elif verify_status['is_verified']:
