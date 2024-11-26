@@ -128,6 +128,16 @@ async def start_command(client: Client, message: Message):
                 except:
                     pass
 
+            SD = await message.reply_text("Baka! Files will be deleted After 300 seconds. Save them to the Saved Message now!")
+            await asyncio.sleep(300)
+
+            for snt_msg in snt_msgs:
+                try:
+                    await snt_msg.delete()
+                    await SD.delete()
+                except:
+                    pass
+
         elif verify_status['is_verified']:
             reply_markup = InlineKeyboardMarkup(
                 [[InlineKeyboardButton("About Me", callback_data="about"),
