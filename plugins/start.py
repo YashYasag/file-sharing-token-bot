@@ -32,6 +32,9 @@ from helper_func import subscribed, encode, decode, get_messages, get_shortlink,
 from database.database import add_user, del_user, full_userbase, present_user
 from shortzy import Shortzy
 
+"""add time in seconds for waiting before delete 
+1 min = 60, 2 min = 60 × 2 = 120, 5 min = 60 × 5 = 300"""
+
 # Logging configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -69,74 +72,85 @@ async def start_command(client: Client, message: Message):
             await message.reply(f"Your token successfully verified and valid for: 24 Hour", reply_markup=reply_markup, protect_content=False, quote=True)
 
         elif len(message.text) > 7 and verify_status['is_verified']:
+        try:
+            base64_string = message.text.split(" ", 1)[1]
+        except:
+            return
+        _string = await decode(base64_string)
+        argument = _string.split("-")
+        
+        # Logic to calculate the range of IDs
+        if len(argument) == 3:
             try:
-                base64_string = message.text.split(" ", 1)[1]
+                start = int(int(argument[1]) / abs(client.db_channel.id))
+                end = int(int(argument[2]) / abs(client.db_channel.id))
             except:
                 return
-            _string = await decode(base64_string)
-            argument = _string.split("-")
-            if len(argument) == 3:
-                try:
-                    start = int(int(argument[1]) / abs(client.db_channel.id))
-                    end = int(int(argument[2]) / abs(client.db_channel.id))
-                except:
-                    return
-                if start <= end:
-                    ids = range(start, end+1)
-                else:
-                    ids = []
-                    i = start
-                    while True:
-                        ids.append(i)
-                        i -= 1
-                        if i < end:
-                            break
-            elif len(argument) == 2:
-                try:
-                    ids = [int(int(argument[1]) / abs(client.db_channel.id))]
-                except:
-                    return
-            temp_msg = await message.reply("Please wait...")
+            ids = range(start, end+1) if start <= end else []
+        elif len(argument) == 2:
             try:
-                messages = await get_messages(client, ids)
+                ids = [int(int(argument[1]) / abs(client.db_channel.id))]
             except:
-                await message.reply_text("Something went wrong..!")
                 return
-            await temp_msg.delete()
-            
-            snt_msgs = []
-            
-            for msg in messages:
-                if bool(CUSTOM_CAPTION) & bool(msg.document):
-                    caption = CUSTOM_CAPTION.format(previouscaption="" if not msg.caption else msg.caption.html, filename=msg.document.file_name)
-                else:
-                    caption = "" if not msg.caption else msg.caption.html
+        
+        temp_msg = await message.reply("Please wait...")
+        try:
+            messages = await get_messages(client, ids)
+        except:
+            await message.reply_text("Something went wrong..!")
+            return
+        await temp_msg.delete()
 
-                if DISABLE_CHANNEL_BUTTON:
-                    reply_markup = msg.reply_markup
-                else:
-                    reply_markup = None
+        snt_msgs = []
 
-                try:
-                    snt_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML, reply_markup=reply_markup, protect_content=PROTECT_CONTENT)
-                    await asyncio.sleep(0.5)
-                    snt_msgs.append(snt_msg)
-                except FloodWait as e:
-                    await asyncio.sleep(e.x)
-                    snt_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML, reply_markup=reply_markup, protect_content=PROTECT_CONTENT)
-                    snt_msgs.append(snt_msg)
-                except:
-                    pass
+        # Sending files and collecting the sent message objects
+        for msg in messages:
+            if bool(CUSTOM_CAPTION) & bool(msg.document):
+                caption = CUSTOM_CAPTION.format(previouscaption="" if not msg.caption else msg.caption.html, filename=msg.document.file_name)
+            else:
+                caption = "" if not msg.caption else msg.caption.html
 
-            SD = await message.reply_text("Baka! Files will be deleted After 300 seconds. Save them to the Saved Message now!")
-            await asyncio.sleep(300)
+            if DISABLE_CHANNEL_BUTTON:
+                reply_markup = msg.reply_markup
+            else:
+                reply_markup = None
 
-            for snt_msg in snt_msgs:
-                try:
-                    await snt_msg.delete()
-                    await SD.delete()
-                except:
-                    pass
+            try:
+                snt_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML, reply_markup=reply_markup, protect_content=PROTECT_CONTENT)
+                await asyncio.sleep(0.5)
+                snt_msgs.append(snt_msg)
+            except FloodWait as e:
+                await asyncio.sleep(e.x)
+                snt_msg = await msg.copy(chat_id=message.from_user.id, caption=caption, parse_mode=ParseMode.HTML, reply_markup=reply_markup, protect_content=PROTECT_CONTENT)
+                snt_msgs.append(snt_msg)
+            except:
+                pass
+
+        # Send the warning message and set a 2-minute delay for file deletion
+        SD = await message.reply_text("Your files will be deleted in 2 minutes. Please save them to your Saved Messages now!")
+        
+        # Wait for 2 minutes (120 seconds)
+        await asyncio.sleep(120)
+
+        # Delete the sent messages
+        for snt_msg in snt_msgs:
+            try:
+                await snt_msg.delete()
+            except:
+                pass
+        
+        # Send the final deletion confirmation message
+        await SD.edit_text("Your files have been deleted.")
+        
+        # Wait for a further 2 minutes before final deletion (if needed)
+        await asyncio.sleep(120)
+
+        # Final cleanup: delete the warning message
+        try:
+            await SD.delete()
+        except:
+            pass
+
 
         elif verify_status['is_verified']:
             reply_markup = InlineKeyboardMarkup(
